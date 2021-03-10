@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<!--Disclaimer: This code/webpage is provided as is, with no warranty whatsoever. 
+Feel free to use, reuse, repurpose. Bob Gouzinis 2021-->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+.buttonA {
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
+  cursor: pointer;
+  font-size: 28px;
+}
+</style>
+</head>
+
+
+<body>
+<h3>Mandelbrot and Julia</h3>
+<p>Click on a point C of the Mandelbrot set on the left to zoom in and see corresponding Julia set for that fixed C value on the right.</p>  
+<center>
+<canvas id="myCanvas" width="800" height="700" onclick="mouseClickHandler(event)"></canvas>
+<canvas id="juCanvas" width="440" height="400"></canvas>
+<center>
+<br />
+
+<center>
+Bob Gouzinis | <a href="http://gouzinis.com">gouzinis.com</a> | <a href="https://twitter.com/gouz66">@gouz66</a>
+<br />
+<h5>
+Disclaimer: This code/webpage is provided as is, with no purpose and no warranty whatsoever. 
+Feel free to use, reuse, repurpose. Bob Gouzinis 2021
+</h5>
+</center>
+
+<script>
+
+
+	var canvas = document.getElementById("myCanvas");
+	var ctx = canvas.getContext("2d");
+	var juCanvas = document.getElementById("juCanvas");
+	var juCtx = juCanvas.getContext("2d");	
+	
+	ctx.font = "40px Arial";
+	var backgroundColor = "#AAAAFF";
+	var textBackgroundColor = "#EEEEEE";
+	var textBackgroundHighlight1 = "yellow"
+	var textBackgroundHighlight2 = "orange"	
+	var color1 = "#2222AA";
+	
+	var colorsArray = [
+		"#4444EE",
+		"#0022AA",
+		"#0022CC",
+		"#0022EE",
+		"#0044EE",
+		"#0066EE",
+		"#0088EE",
+		"#00AAEE",
+		"#00CCEE",
+		"#00EEEE",
+		"#22EEEE",
+		"#44EEEE",
+		"#66EEEE",
+		"#88EEEE",
+		"#AAEEEE",
+		"#CCEECC",
+		"#CCEEAA",
+		"#CCEE88",
+		"#CCEE66",
+		"#CCEE44",
+		"#CCEE22",
+		"#4444EE",
+		"#0022AA",
+		"#0022CC",
+		"#0022EE",
+		"#0044EE",
+		"#0066EE",
+		"#0088EE",
+		"#00AAEE",
+		"#00CCEE",
+		"#00EEEE",
+		"#22EEEE",
+		"#44EEEE",
+		"#66EEEE",
+		"#88EEEE",
+		"#AAEEEE",
+		"#CCEECC",
+		"#CCEEAA",
+		"#CCEE88",
+		"#CCEE66",
+		"#CCEE44",
+		"#CCEE22",
+		"#4444EE",
+		"#0022AA",
+		"#0022CC",
+		"#0022EE",
+		"#0044EE",
+		"#0066EE",
+		"#0088EE",
+		"#00AAEE",
+		"#00CCEE",
+		"#00EEEE",
+		"#22EEEE",
+		"#44EEEE",
+		"#66EEEE",
+		"#88EEEE",
+		"#AAEEEE",
+		"#CCEECC",
+		"#CCEEAA",
+		"#CCEE88",
+		"#CCEE66",
+		"#CCEE44",
+		"#CCEE22"		
+		];
+	
+	var myCurrentMousePos = { x: 0., y: 0. }
+	
+	var maxIter = 1000;
+	var graphScale = 175;
+	var graphOrigin = { x: canvas.width/2, y: canvas.height/2 }
+	
+	var graphScaleJulia = 100;
+	var graphOriginJulia = { x: juCanvas.width/2, y: juCanvas.height/2 }	
+
+	var haveDrawnMand = false;
+	var hasLastDrawnPoint = false;
+	var lastPt = { x: 0., y: 0. }
+
+	//Fixed c param for current Julia set
+	var juliaC = { x: 0., y: 0. }
+	function resetJuliaC(p) { juliaC = {x: p.x, y: p.y} }
+	
+	function resetJuliaCFromCanvasCoordinates(pt)
+	{
+		var z = {
+			x: (pt.x - graphOrigin.x)/graphScale + juliaC.x,
+			y: (pt.y - graphOrigin.y)/graphScale + juliaC.y
+			}
+		
+		resetJuliaC(z);
+	}
+
+	function convertCanvasToMandelbrotPt(pt)
+	{
+		var z = {
+			x: (pt.x - graphOrigin.x)/graphScale + juliaC.x,
+			y: (pt.y - graphOrigin.y)/graphScale + juliaC.y
+			}
+			
+		return z;
+	}
+
+	function keyPressHandler(ev)
+	{
+		var kc = event.keyCode;
+		if (kc == 13)
+		{
+			deltaScaling = document.getElementById("scaleInput").value;
+		}
+	}
+
+
+	function getMousePos(canvas, evt) 
+	{
+		var rect = canvas.getBoundingClientRect();
+        return {
+			x: evt.clientX - rect.left,
+			y: evt.clientY - rect.top
+			};
+	}
+
+	canvas.addEventListener('mousemove', e => {
+		myCurrentMousePos = getMousePos(canvas, e);	
+	});
+
+	
+	
+	function lengthOfVector(v)
+	{
+		var xx = v.x*v.x;
+		var yy = v.y*v.y;
+		var len = Math.sqrt(xx+yy);
+		return len;
+	}
+	
+	function pointsDistance(p, q)
+	{
+		var dx = p.x - q.x;
+		var dx2 = dx*dx;
+		var dy = p.y - q.y;
+		var dy2 = dy*dy;
+		
+		var len = Math.sqrt(dx2+dy2);
+		return len;
+	}
+	
+	function deltaVec(p,q)
+	{
+		var dx = q.x - p.x;
+		var dy = q.y - p.y;
+		return { x: dx, y: dy };
+	}
+	
+	
+	function normaliseVector(p, q)
+	{
+		var len = pointsDistance(p,q);
+		var dv = deltaVec(p,q);
+		dv.x = dv.x / len;
+		dv.y = dv.y / len;
+		return dv;
+	}
+	
+	//t is length parameter; pt1, pt2 are start/end of line. 
+	//Returns point.
+	function pointOfParameterOnLine(t, pt1, pt2)
+	{
+		var len = pointsDistance(pt1, pt2);
+		if (len < 0.00001)
+			return pt1;
+
+		var q = t / len;
+		
+		var dx = pt2.x - pt1.x;
+		var x = pt1.x + q*dx;		
+		var dy = pt2.y - pt1.y;
+		var y = pt1.y + q*dy;
+
+		var poi = { x: x, y: y }
+		return poi;
+	}
+
+
+
+
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	
+	function drawLine(pt1, pt2)
+	{
+		ctx.beginPath();
+		ctx.moveTo(pt1.x, pt1.y);
+		ctx.lineTo(pt2.x, pt2.y);
+		ctx.stroke();		
+	}
+	
+	
+	function drawCircle(pt, rad)
+	{
+		ctx.beginPath();
+		ctx.arc(pt.x, pt.y, rad, 0, Math.PI*2);
+		ctx.strokeStyle = "#220022";
+		ctx.stroke();
+		ctx.closePath();
+	}	
+	
+	
+	function drawPointCx(cx, pt, col)
+	{
+		var old_col = cx.fillStyle;
+		cx.fillStyle = col;
+		cx.fillRect(pt.x, pt.y, 1, 1);		
+		cx.fillStyle = old_col;
+	}
+	
+	function drawPoint(pt, col)
+	{
+		var old_col = ctx.fillStyle;
+		ctx.fillStyle = col;
+		ctx.fillRect(pt.x, pt.y, 1, 1);		
+		ctx.fillStyle = old_col;
+	}
+	
+	
+	
+	//text centered at x,y.
+	function drawText(txt0, x, y, height, withBackground)
+	{
+		var txt = " " + txt0 + " ";
+		var fontSize = height;
+		var fontSizeStr = fontSize.toString();
+		var fontStr = fontSizeStr + "px Arial";
+		ctx.font = fontStr;
+
+		var w = ctx.measureText(txt).width;
+		var x0 = x-w/2;
+		var y0 = y-height/2;
+		
+		if (withBackground)
+		{
+			//ctx.fillStyle = backgroundColor;
+			ctx.fillStyle = textBackgroundColor;
+			ctx.fillRect(x0, y0, w, height);		
+			ctx.fillStyle = color1;
+		}
+		
+		ctx.fillText(txt, x0, y+0.4*height);	
+	}
+	
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+
+	
+	
+	function drawGizmo()
+	{	
+		var rad = 50.;
+		var pt = { x: 200, y: 250 }
+		drawCircle(pt, rad);		
+		var pt2 = myCurrentMousePos;
+		var dir = normaliseVector(pt, pt2);
+		len = rad*2;
+		pt2.x = pt.x + len*dir.x;
+		pt2.y = pt.y + len*dir.y;
+		drawLine(pt, pt2);	
+	}
+
+
+
+	function drawZPoint(z0, origin, scale, col)
+	{
+		var z = {
+				x: z0.x - juliaC.x, 
+				y: z0.y - juliaC.y 
+		}
+		
+		var pt = { 
+			x: z.x*scale + origin.x,
+			y: z.y*scale + origin.y
+		}
+		
+		drawPoint(pt, col);
+	}
+
+	function drawZPointJulia(z, origin, scale, col)
+	{
+		var pt = { 
+			x: z.x*scale + origin.x,
+			y: z.y*scale + origin.y
+		}
+		
+		drawPointCx(juCtx, pt, col);		
+	}
+
+
+	
+	function computePointInSet(c)
+	{
+		var z = { x: 0., y: 0. }
+		i=0;
+		for (i=0; i<maxIter; ++i)
+		{
+			var a = z.x*z.x - z.y*z.y + c.x;
+			var b = 2*z.x*z.y + c.y;
+			
+			var z = { x: a, y: b }
+			var len = lengthOfVector(z)
+			if (len > 2.)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}	
+
+	function computePointInSetJulia(z0, c)
+	{
+		var z = { x: z0.x, y: z0.y }
+		
+		for (i=0; i<maxIter; ++i)
+		{
+			var a = z.x*z.x - z.y*z.y + c.x;
+			var b = 2*z.x*z.y + c.y;			
+			var z = { x: a, y: b }
+			
+			var len = lengthOfVector(z)
+			if (len > 2.)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	
+	
+	function isPointInSet(c)
+	{
+		var z = { x: 0., y: 0. }
+		
+		for (i=0; i<maxIter; ++i)
+		{
+			var a = z.x*z.x - z.y*z.y + c.x;
+			var b = 2*z.x*z.y + c.y;
+			
+			var z = { x: a, y: b }
+			var len = lengthOfVector(z)
+			if (len > 2.)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	function isPointInSetJulia(z0, c)
+	{
+		var z = { x: z0.x, y: z0.y }
+		
+		for (i=0; i<maxIter; ++i)
+		{
+			var a = z.x*z.x - z.y*z.y + c.x;
+			var b = 2*z.x*z.y + c.y;			
+			var z = { x: a, y: b }
+			
+			var len = lengthOfVector(z)
+			if (len > 2.)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	function convertNIterationsToColor(ni)
+	{
+		if (ni < 0)
+			return "black";
+		
+		var factor = colorsArray.length/maxIter;
+		var dc = ni*factor;
+		var d = Math.floor(dc);
+		if (d > colorsArray.length)
+			d = colorsArray.length;
+		return colorsArray[d];
+	}
+	
+	
+	function findColorForPoint(c)
+	{
+		//if (isPointInSet(c))
+		//	return "black";
+		var ni = computePointInSet(c);
+		var col = convertNIterationsToColor(ni);
+		return col;
+	}
+	
+	function findColorForPointJulia(z, c)
+	{
+		//if (isPointInSetJulia(z, c))
+		//	return "black";
+		var ni = computePointInSetJulia(z, c);
+		var col = convertNIterationsToColor(ni);
+		return col;
+	}
+
+
+
+	//scale is number of pixels/canvas units per unit of complex space
+	function drawMand(origin, scale)
+	{
+		if (haveDrawnMand)
+			return;
+		//haveDrawnMand = true;
+
+		//ctx.fillStyle = backgroundColor;
+		//ctx.fillRect(0, 0, canvas.width, canvas.height);
+		
+		//drawCircle(origin, scale);
+		
+		var pbl = { 
+					x: 0,
+					y: 0
+				}
+		
+		var ptr = { 
+					x: canvas.width,
+					y: canvas.height
+				}		
+		
+		//var zbl = { x: -2.0, y: -2.0 }
+		//var ztr = { x:  2.0, y:  2.0 }
+		
+		var zbl = convertCanvasToMandelbrotPt(pbl);
+		var ztr = convertCanvasToMandelbrotPt(ptr);
+		
+		var zdelta = 1./scale;
+		var c = { x: zbl.x, y: zbl.y }
+		if (hasLastDrawnPoint)
+		{
+			c.x = lastPt.x;
+			c.y = lastPt.y;
+		}
+		
+		
+		var ip = 0;
+		while (c.y <= ztr.y)
+		{
+			c.x = zbl.x;
+			while (c.x <= ztr.x)
+			{
+				var col = findColorForPoint(c);
+				drawZPoint(c, origin, scale, col);
+				
+				lastPt.x = c.x;
+				lastPt.y = c.y;
+				hasLastDrawnPoint = true;
+								
+				if (ip >= 5000)
+					return;
+				
+				++ip;
+				
+				c.x = c.x + zdelta;
+			}
+			
+			c.y = c.y + zdelta;
+		}
+		
+		//if got to here, we've finished drawing mandelbrot. 
+		haveDrawnMand = true;
+		hasLastDrawnPoint = false;		
+	}
+
+
+	//scale is number of pixels/canvas units per unit of complex space
+	function drawJulia(origin, scale)
+	{
+		//drawCircle(origin, scale);
+		
+		var zbl = { x: -2.0, y: -2.0 }
+		var ztr = { x:  2.0, y:  2.0 }
+		
+		var c = juliaC;
+		var zdelta = 1./scale;
+		var z = { x: zbl.x, y: zbl.y }
+		
+		while (z.y <= ztr.y)
+		{
+			z.x = zbl.x;
+			while (z.x <= ztr.x)
+			{
+				var col = findColorForPointJulia(z, c);
+				drawZPointJulia(z, origin, scale, col);
+				
+				z.x = z.x + zdelta;
+			}
+			
+			z.y = z.y + zdelta;
+		}
+		
+	}
+	
+	function drawParams()
+	{
+		var str = "Clicked C = " + juliaC.x.toString() + " , " + juliaC.y.toString();
+		var x = canvas.width/2;
+		var y = 20;
+		drawText(str, x, y, y/2, true);
+	}
+	
+	function draw()
+	{
+		juCtx.fillStyle = backgroundColor;
+		juCtx.fillRect(0, 0, juCanvas.width, juCanvas.height);
+		
+		ctx.font = "20px Arial";
+		ctx.fillStyle = "#2222BB";		
+		juCtx.fillStyle = "#2222BB";		
+		
+		var origin = { x: canvas.width/2, y: canvas.height/2 }
+		//graphScale = 160;	
+		
+		if (!haveDrawnMand)
+		{
+			drawMand(graphOrigin, graphScale);
+			return;
+		}
+		
+		drawParams();
+		
+		drawJulia(graphOriginJulia, graphScaleJulia);
+		//drawGizmo();
+	}
+	
+	setInterval(draw, 5);
+	
+	
+	function mouseClickHandler(event)
+	{
+		var pt = getMousePos(canvas, event);
+		resetJuliaCFromCanvasCoordinates(pt);
+		
+		graphScale = graphScale * 2.;
+		haveDrawnMand = false;
+	}
+	
+</script>
+
+
+</body>
+</html>
